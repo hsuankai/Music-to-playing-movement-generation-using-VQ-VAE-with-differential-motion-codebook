@@ -1,0 +1,73 @@
+# WARNING: This is the base configuration file shared across ALL solvers in AudioCraft
+# Please don't update this file directly. Instead use distinct configuration files
+# to override the below configuration.
+defaults:
+   - _self_
+   - solver: musicgen/musicgen_base_32khz
+
+
+FPS: "fps30"
+
+Trainer:
+  default_root_dir: "lightning_logs"
+  accelerator: "gpu"
+  strategy: "ddp"
+  devices: 1
+  precision: 16
+  max_epochs: 500
+  gradient_clip_val: 1.0
+
+optim:
+  lr: 1e-4
+  betas: (0.9, 0.95)
+  eps: 1e-08
+  weight_decay: 0.1
+
+data:
+  path: "../data/"
+  audio:
+    in_channels: 128
+    aggr_length: 5
+  keypoints:
+      in_channels: 69
+      full_keypoints: 23
+      body: [0, 1, 2, 3, 4, 13, 14, 15, 16, 17, 18]
+      rh: [6, 7, 8]
+  
+motionvqvae:
+  model:
+      codebook_num: 2
+      codebook_size: [512, 512]
+      emb_dim: 512
+      gn: 32
+      act: swish
+      ch: 128
+      num_res_blocks: 2  
+      dropout: 0.1
+      resamp_with_conv: true
+      fps30:
+        ch_mult: [1, 2, 4, 4]
+      fps60:
+        ch_mult: [1, 2, 4, 8, 8]
+      fps120:
+        ch_mult: [1, 2, 4, 8, 8, 8]
+  loss_weight:
+      commit: 0.5
+      vel: 1
+      acc: 0
+  
+  
+audioenc:
+  model:
+    emb_dim: 512
+    gn: 32
+    act: swish
+    ch: 128
+    num_res_blocks: 2  
+    dropout: 0.1
+    fps30:
+      ch_mult: [1, 2, 4, 4]
+    fps60:
+      ch_mult: [1, 2, 4, 4, 4]
+    fps120:
+      ch_mult: [1, 2, 4, 4, 4, 4]
