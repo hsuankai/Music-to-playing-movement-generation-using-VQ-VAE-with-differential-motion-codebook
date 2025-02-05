@@ -13,18 +13,19 @@ To get started as quickly as possible, follow the instructions in this section. 
 ### Data
 
 ### Training from scratch
-To reproduce the results, run following commands:
+To reproduce the results, run the following commands:
 ```
-python train.py --d_model 512 --gpu_ids 0
-python test.py --plot_path xxx.mp4 --output_path xxx.pkl
+python train.py --fps 30
+python test.py --fps 30
 ```
-If you have problem with limited gpu memory usage, try to decrease `--d_model` or use multi-gpu `--gpu_ids 0,1,2`.
-- `--plot_path` make video of predicted playing movement. We here specify one of violinist for visualization.
-- `--output_path` save predicted keypoints and ground truth, whose dimensions is N x K x C, where N is the number of frames, K is the number of keypoints and C is three axes x, y and z.
+You can specify 'fps' 30, 60, or 120 to train and test model at different resolutions.
 
 ### Inference in the wild
-If you want to make video and get predicted keypoints for custom audio data by pretrained model, run following commands:
+If you want to make video and get predicted keypoints for custom audio data by pretrained model, run the following commands:
 ```
-python inference.py --inference_audio xxx.wav --plot_path xxx.mp4 --output_path xxx.pkl
+python inference.py --fps 30 --input_audio xxx.wav --plot_path xxx.mp4 --output_path xxx.pkl
 ```
-`--plot_path` and `--output_path` are the same as described in **test.py**, and you need to put the path of your violin music on argument `--inference_audio`.
+- `--fps` specify the model trained on different resolutions.
+- `--input_audio` the path of your audio file.
+- `--plot_path`  the path of plotted video.
+- `--output_path` save predicted keypoints as pickle file, whose dimensions is N x K x C, where N is the number of frames, K is the number of keypoints and C is three axes x, y and z.
