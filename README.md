@@ -1,8 +1,8 @@
 # Music-to-playing-movement-generation-using-VQ-VAE-with-differential-motion-codebook
-This is the pytorch implementation of Music-to-playing-movement-generation-using-VQ-VAE-with-differential-motion-codebook:  
+This repository provides a PyTorch implementation of Music-to-Playing-Movement-Generation-using-VQ-VAE-with-Differential-Motion-Codebook. The codebase enables training and inference for generating violin playing movement from audio input.
 
 ## Quick start
-To get started as quickly as possible, follow the instructions in this section. This should allow you train a model from scratch and inference your own violin music.
+To get started as quickly as possible, follow the instructions in this section. This should allow you to train a model from scratch and perform inference on your own violin music.
 
 ### Dependencies
 - Python 3+ distribution
@@ -15,17 +15,18 @@ To get started as quickly as possible, follow the instructions in this section. 
 ### Training from scratch
 To reproduce the results, run the following commands:
 ```
-python train.py --fps 30
-python test.py --fps 30
+python train.py --fps 30 --model motionvqvae
+python test.py --fps 30 --model motionvqvae
 ```
-You can specify 'fps' 30, 60, or 120 to train and test model at different resolutions.
+- Specify `--model` to train either the MotionVQVAE or Audio2Motion model.
+* Specify --fps as 30, 60, or 120 to train and test the model at different resolutions.
 
 ### Inference in the wild
-If you want to make video and get predicted keypoints for custom audio data by pretrained model, run the following commands:
+If you want to make a video and get predicted keypoints for custom audio data using a pretrained model, run the following command:
 ```
-python inference.py --fps 30 --input_audio xxx.wav --plot_path xxx.mp4 --output_path xxx.pkl
+python inference.py --fps 30 --audio xxx.wav --plot_path results/animation --output_path results/keypoints
 ```
-- `--fps` specify the model trained on different resolutions.
-- `--input_audio` the path of your audio file.
-- `--plot_path`  the path of plotted video.
-- `--output_path` save predicted keypoints as pickle file, whose dimensions is N x K x C, where N is the number of frames, K is the number of keypoints and C is three axes x, y and z.
+- `--fps` Specify the frame rate that matches the model you trained (30, 60, or 120).
+- `--audio` Path to your audio file (e.g., xxx.wav).
+- `--plot_path`  Path to save the generated animation video.
+- `--output_path` Path to save predicted keypoints as a pickle file (dimensions: N x K x C, where N = number of frames, K = number of keypoints, C = x, y, z axes).
