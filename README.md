@@ -18,7 +18,7 @@ To reproduce the results, run the following commands:
 python train.py --fps 30 --model motionvqvae
 python test.py --fps 30 --model motionvqvae
 ```
-- Specify `--model` to train either the MotionVQVAE or Audio2Motion model.
+- Specify `--model` to train either the motionvqvae or audio2motion model.
 * Specify --fps as 30, 60, or 120 to train and test the model at different resolutions.
 
 ### Inference in the wild
