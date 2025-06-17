@@ -1,6 +1,3 @@
-# Frame rate identifier
-fps: &fps 30
-
 earlystopping:
   start_after_epoch: 30 
   monitor: val_loss    
@@ -22,7 +19,6 @@ optim:
   weight_decay: 0.1
 
 data:
-  fps: *fps
   batch_size: 32
   num_workers: 4
   train_path: "data/train_"

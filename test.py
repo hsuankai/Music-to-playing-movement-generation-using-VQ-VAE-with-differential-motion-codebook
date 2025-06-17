@@ -72,9 +72,7 @@ TEST_PIECES = ["be4", "be5", "be6", "be7"]
 with open("config/config.yaml", "r") as f:
     cfg = yaml.safe_load(f)
 cfg = AttrDict.from_nested_dicts(cfg)
-
-# Override cfg.fps to match the integer FPS argument
-cfg.fps = f"{FPS}"
+cfg.fps = f"{args.fps}"
 
 data_dir = Path("data")
 data_file = f"test_fps{FPS}.pkl"

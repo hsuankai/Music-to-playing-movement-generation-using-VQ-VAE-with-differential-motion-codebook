@@ -54,9 +54,9 @@ def load_config(path: Path):
     return AttrDict.from_nested_dicts(data)
 
 
-def build_dataloaders(cfg, train_model: str):
-    train_dataset = AudioSkeletonDataset(cfg.data, split="train", train_model=train_model)
-    val_dataset = AudioSkeletonDataset(cfg.data, split="val", train_model=train_model)
+def build_dataloaders(cfg, model: str, fps: int):
+    train_dataset = AudioSkeletonDataset(cfg.data, split="train", model=model, fps=fps)
+    val_dataset = AudioSkeletonDataset(cfg.data, split="val", model=model, fps=fps)
 
     batch_size = cfg.data.batch_size
     num_workers = cfg.data.num_workers
@@ -83,8 +83,8 @@ def build_dataloaders(cfg, train_model: str):
     return train_loader, val_loader
 
 
-def select_model(cfg, train_model: str):
-    if train_model == "motionvqvae":
+def select_model(cfg, model: str):
+    if model == "motionvqvae":
         return MotionVQVAE(cfg)
 
     # audio2motion: load pretrained VQ-VAE
@@ -96,14 +96,11 @@ def select_model(cfg, train_model: str):
 def main():
     args = parse_args()
     cfg = load_config(args.config)
-    FPS = args.fps
-
-    # Override cfg.fps to match the integer FPS argument
-    cfg.fps = f"{FPS}"
+    cfg.fps = f"{args.fps}"
 
     
-    train_loader, val_loader = build_dataloaders(cfg, args.train_model)
-    model = select_model(cfg, args.train_model)
+    train_loader, val_loader = build_dataloaders(cfg, args.model, args.fps)
+    model = select_model(cfg, args.model)
     
     # Callbacks
     early_stop = DelayedEarlyStopping(**cfg.earlystopping)
