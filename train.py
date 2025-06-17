@@ -29,7 +29,7 @@ def parse_args():
         help="Frame rate for loading test data and checkpoints (e.g., 30, 60, 120)",
     )
     parser.add_argument(
-        "--train_model",
+        "--model",
         choices=("motionvqvae", "audio2motion"),
         default="audio2motion",
         help="Which model to train",
