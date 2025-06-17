@@ -1,8 +1,8 @@
 # Music-to-playing-movement-generation-using-VQ-VAE-with-differential-motion-codebook
-This is the pytorch implementation of Music-to-playing-movement-generation-using-VQ-VAE-with-differential-motion-codebook:  
+This repository provides a PyTorch implementation of Music-to-Playing-Movement-Generation-using-VQ-VAE-with-Differential-Motion-Codebook. The codebase enables training and inference for generating violin playing movement from audio input.
 
 ## Quick start
-To get started as quickly as possible, follow the instructions in this section. This should allow you train a model from scratch and inference your own violin music.
+To get started as quickly as possible, follow the instructions in this section. This should allow you to train a model from scratch and perform inference on your own violin music.
 
 ### Dependencies
 - Python 3+ distribution
@@ -13,18 +13,20 @@ To get started as quickly as possible, follow the instructions in this section. 
 ### Data
 
 ### Training from scratch
-To reproduce the results, run following commands:
+To reproduce the results, run the following commands:
 ```
-python train.py --d_model 512 --gpu_ids 0
-python test.py --plot_path xxx.mp4 --output_path xxx.pkl
+python train.py --fps 30 --model motionvqvae
+python test.py --fps 30 --model motionvqvae
 ```
-If you have problem with limited gpu memory usage, try to decrease `--d_model` or use multi-gpu `--gpu_ids 0,1,2`.
-- `--plot_path` make video of predicted playing movement. We here specify one of violinist for visualization.
-- `--output_path` save predicted keypoints and ground truth, whose dimensions is N x K x C, where N is the number of frames, K is the number of keypoints and C is three axes x, y and z.
+- Specify `--model` to train either the motionvqvae or audio2motion model.
+* Specify --fps as 30, 60, or 120 to train and test the model at different resolutions.
 
 ### Inference in the wild
-If you want to make video and get predicted keypoints for custom audio data by pretrained model, run following commands:
+If you want to make a video and get predicted keypoints for custom audio data using a pretrained model, run the following command:
 ```
-python inference.py --inference_audio xxx.wav --plot_path xxx.mp4 --output_path xxx.pkl
+python inference.py --fps 30 --audio xxx.wav --plot_path results/animation --output_path results/keypoints
 ```
-`--plot_path` and `--output_path` are the same as described in **test.py**, and you need to put the path of your violin music on argument `--inference_audio`.
+- `--fps` Specify the frame rate that matches the model you trained (30, 60, or 120).
+- `--audio` Path to your audio file (e.g., xxx.wav).
+- `--plot_path`  Path to save the generated animation video.
+- `--output_path` Path to save predicted keypoints as a pickle file (dimensions: N x K x C, where N = number of frames, K = number of keypoints, C = x, y, z axes).
