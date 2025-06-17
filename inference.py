@@ -58,9 +58,6 @@ cfg = AttrDict.from_nested_dicts(cfg)
 # Override cfg.fps to match the integer FPS argument
 cfg.fps = f"{FPS}"
 
-with open('data/test_fps30.pkl', 'rb') as f:
-    test = pickle.load(f)
-
 # -------------------------------------------------------------------------
 # Initialize model
 # -------------------------------------------------------------------------
