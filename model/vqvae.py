@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .bottleneck import  BottleneckBlock
 import lightning as L
+from .bottleneck import  BottleneckBlock
 from .encdec import Encoder1d, Decoder1d
 
 
@@ -20,22 +20,24 @@ from .encdec import Encoder1d, Decoder1d
 
 # define the LightningModule
 class MotionVQVAE(L.LightningModule):
-    def __init__(self, cfg, fps, loss_weight, in_channels=128, codebook_num=2, codebook_size=[512, 512], emb_dim=512, gn=32, act="swish",
-                 ch=128, num_res_blocks=2, dropout=0.1, resamp_with_conv=True, **kwargs):
+    def __init__(self, cfg, **kwargs):
         super().__init__()
-        self.save_hyperparameters()
-        model_params = cfg.motionvqvae["model"]
-        loss_weight = cfg.motionvqvae["loss_weight"]
-        self.commit, self.vel, self.acc = loss_weight.values()
-        self.codebook_num = codebook_num
-        self.encoder = Encoder1d(in_channels, emb_dim, ch)
-        self.decoder = Decoder1d(in_channels, emb_dim, ch)
-        self.bottleneck = nn.ParameterList([BottleneckBlock(args.codebook_size[i], emb_dim, 0.99) for i in range(args.codebook_num)])
-        self.refine = nn.Linear(args.emb_dim*args.codebook_num, args.emb_dim)
-    
+        self.cfg = cfg
+        fps = cfg.fps
+        model_params = cfg.motionvqvae.model
+        loss_weight = cfg.motionvqvae.loss_weight
+        emb_dim = model_params.ch * model_params[f"fps{fps}"].ch_mult[-1]
+        self.rec, self.vel, self.acc, self.commit, self.commit1, self.commit2, self.commit3 = loss_weight.values()
+        self.codebook_size = model_params.codebook_size
+        self.encoder = Encoder1d(ch_mult=model_params[f"fps{fps}"].ch_mult, **model_params)
+        self.decoder = Decoder1d(ch_mult=model_params[f"fps{fps}"].ch_mult, **model_params)
+        self.bottleneck = nn.ModuleList([BottleneckBlock(self.codebook_size[i], emb_dim, 0.99) for i in range(len(self.codebook_size))])
+        self.refine = nn.Conv1d(emb_dim*len(self.codebook_size), emb_dim, kernel_size=1, padding=0)
+        self.example_input_array = torch.zeros(1, int(fps)*20, 69)  # optional
+        
     def quantization(self, x):
-        N, T_, C = x.shape
-        commit_losses = []
+        N, C, T_ = x.shape
+        commit_losses = 0
         x_ls = []
         x_ds = []
         for i, bottleneck in enumerate(self.bottleneck):
@@ -46,8 +48,11 @@ class MotionVQVAE(L.LightningModule):
                 x_d = x_d.view(N, T_, -1)
                 x_ls.append(x_l)
                 x_ds.append(x_d)
-                commit_losses.append(commit_loss)
+                commit_loss = commit_loss * self.commit1
+                commit_losses += commit_loss
                 metrics["commit_loss"] = commit_loss
+                for k, v in metrics.items():
+                    metrics[k] = v.float()
             # 1st order quantization X2:XT_ refinement
             elif i == 1:
                 x_diff = x[..., 1:] - x[..., :-1]
@@ -56,10 +61,11 @@ class MotionVQVAE(L.LightningModule):
                 x_diff_d = x_diff_d.view(N, T_-1, -1)
                 x_ls.append(x_diff_l)
                 x_ds.append(x_diff_d)
-                commit_losses.append(commit_diff_loss)
+                commit_diff_loss = commit_diff_loss * self.commit2
+                commit_losses += commit_diff_loss
                 metrics["commit_diff_loss"] = commit_diff_loss
                 for k, v in metrics_diff.items():
-                    metrics[k + "_diff"] = v
+                    metrics[k + "_diff"] = v.float()
             # 2nd order quantization X3:XT_ refinement
             elif i == 2:
                 x_diff2 = x_diff[..., 1:] - x_diff[..., :-1]
@@ -68,16 +74,19 @@ class MotionVQVAE(L.LightningModule):
                 x_diff2_d = x_diff2_d.view(N, T_-2, -1)
                 x_ls.append(x_diff2_l)
                 x_ds.append(x_diff2_d)
-                commit_losses.append(commit_diff2_loss)
+                commit_diff2_loss = commit_diff2_loss * self.commit3
+                commit_losses += commit_diff2_loss
                 metrics["commit_diff2_loss"] = commit_diff2_loss
                 for k, v in metrics_diff2.items():
-                    metrics[k + "_diff2"] = v
+                    metrics[k + "_diff2"] = v.float()
+        commit_losses /= len(self.codebook_size)
         return x_ds, x_ls, commit_losses, metrics
     
     def refine_quantize(self, x_ds):
-        for i in range(self.codebook_num):
+        for i in range(len(self.bottleneck)):
             if i == 0:
                 x_d = x_ds[i]
+                
             elif i == 1:
                 x_diff_d = x_ds[i]
                 # cumulative sum 1st order differential quantized representation
@@ -85,9 +94,9 @@ class MotionVQVAE(L.LightningModule):
                 x_d_refine1 = torch.cumsum(x_d_refine1, dim=1)[:, 1:] # (x2, ..., xt_)
                 # stack vanilla quantized representation and 1st order differential quantized representation    
                 x_d_refine1 = torch.cat((x_d[:, 1:], x_d_refine1), dim=-1)
-                x_d_refine1 = self.refine(x_d_refine1)
+                x_d_refine1 = self.refine(x_d_refine1.transpose(1, 2)).transpose(1, 2)
                 x_d = torch.cat((x_d[:, 0:1], x_d_refine1), dim=1)
-                x_d = x_d.transpose(1, 2)
+                
             elif i == 2:
                 x_diff2_d = x_ds[i]
                 # cumulative sum 2st order differential quantized representation
@@ -102,6 +111,7 @@ class MotionVQVAE(L.LightningModule):
                 x_d_refine2 = torch.cat((pad2, x_d_refine2), dim=1)
                 x_d_refine = torch.cat((x_d, x_d_refine1, x_d_refine2), dim=-1)
                 x_d = self.refine(x_d_refine)
+        x_d = x_d.transpose(1, 2)
         return x_d
     
     def encode(self, x):
@@ -129,7 +139,7 @@ class MotionVQVAE(L.LightningModule):
         x_out = self.decode(x_d, T)
         return x_out
     
-    def forward(self, x, x_target):
+    def forward(self, x):
         N, T, C = x.shape
         # Encode and quantization
         x_d, x_ls, commit_losses, metrics = self.encode(x)
@@ -137,25 +147,34 @@ class MotionVQVAE(L.LightningModule):
         x_out = self.decode(x_d, T)
         return x_out, x_ls, commit_losses, metrics
     
+    def loss(self, commit_losses, x_out, x_target):
+        recons_loss = F.l1_loss(x_out, x_target)
+        velocity_loss = F.l1_loss(x_out[:, 1:] - x_out[:, :-1], x_target[:, 1:] - x_target[:, :-1])
+        acceleration_loss =  F.l1_loss(x_out[:, 2:] + x_out[:, :-2] - 2 * x_out[:, 1:-1], x_target[:, 2:] + x_target[:, :-2] - 2 * x_target[:, 1:-1])
+        monitor_loss = recons_loss + velocity_loss + commit_losses
+        loss = self.rec * recons_loss + self.vel * velocity_loss + self.acc * acceleration_loss +  self.commit * commit_losses
+        loss_metrics = dict(
+            monitor_loss=monitor_loss,
+            loss=loss,
+            recons_loss=recons_loss,
+            velocity_loss=velocity_loss,
+            acceleration_loss=acceleration_loss)
+        return loss, loss_metrics
+    
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.
         # it is independent of forward
         x = batch["keypoints"]
         x_target = batch["keypoints"]
-        x_out, x_ls, commit_losses, metrics = self(x, x_target)
+        x_out, x_ls, commit_losses, metrics = self(x)
        
         # Loss
-        commit_losses = torch.mean(commit_losses)
-        recons_loss = F.l1_loss(x_out, x_target)
-        velocity_loss = F.l1_loss(x_out[:, 1:] - x_out[:, :-1], x_target[:, 1:] - x_target[:, :-1])
-        acceleration_loss =  F.l1_loss(x_out[:, 2:] + x_out[:, :-2] - 2 * x_out[:, 1:-1], x_target[:, 2:] + x_target[:, :-2] - 2 * x_target[:, 1:-1])
-        loss = (1-self.commit) * (recons_loss + self.vel * velocity_loss + self.acc * acceleration_loss) +  self.commit * commit_losses
-        metrics.update(dict(
-            loss=loss,
-            recons_loss=recons_loss,
-            velocity_loss=velocity_loss,
-            acceleration_loss=acceleration_loss))
-        self.log_dict(metrics, prog_bar=True, on_step=False, on_epoch=True)
+        loss, loss_metrics = self.loss(commit_losses, x_out, x_target)
+        metrics.update(loss_metrics)
+        log_metrics = {}
+        for k, v in metrics.items():
+            log_metrics[f"train_{k}"] = v
+        self.log_dict(log_metrics, prog_bar=True, on_step=False, on_epoch=True,  sync_dist=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -163,42 +182,17 @@ class MotionVQVAE(L.LightningModule):
         # it is independent of forward
         x = batch["keypoints"]
         x_target = batch["keypoints"]
-        x_out, x_ls, commit_losses, metrics = self(x, x_target)
+        x_out, x_ls, commit_losses, metrics = self(x)
        
         # Loss
-        commit_losses = torch.mean(commit_losses)
-        recons_loss = F.l1_loss(x_out, x_target)
-        velocity_loss = F.l1_loss(x_out[:, 1:] - x_out[:, :-1], x_target[:, 1:] - x_target[:, :-1])
-        acceleration_loss =  F.l1_loss(x_out[:, 2:] + x_out[:, :-2] - 2 * x_out[:, 1:-1], x_target[:, 2:] + x_target[:, :-2] - 2 * x_target[:, 1:-1])
-        loss = (1-self.commit) * (recons_loss + self.vel * velocity_loss + self.acc * acceleration_loss) +  self.commit * commit_losses
-        metrics.update(dict(
-            loss=loss,
-            recons_loss=recons_loss,
-            velocity_loss=velocity_loss,
-            acceleration_loss=acceleration_loss))
-        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        loss, loss_metrics = self.loss(commit_losses, x_out, x_target)
+        metrics.update(loss_metrics)
+        log_metrics = {}
+        for k, v in metrics.items():
+            log_metrics[f"val_{k}"] = v
+        self.log_dict(log_metrics, prog_bar=True, on_step=False, on_epoch=True,  sync_dist=True)
         return loss
         
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters, lr=1e-4, betas=(0.9, 0.95), eps=1e-08, weight_decay=0.1)
+        optimizer = torch.optim.AdamW(self.parameters(), **self.cfg.optim)
         return optimizer
-    
-    def configure_gradient_clipping(self, optimizer, gradient_clip_val, gradient_clip_algorithm):
-        # Implement your own custom logic to clip gradients
-        # You can call `self.clip_gradients` with your settings:
-        self.clip_gradients(
-            optimizer,
-            gradient_clip_val=gradient_clip_val,
-        )
-    
-    def optimizer_zero_grad(self, epoch, batch_idx, optimizer):
-        optimizer.zero_grad(set_to_none=True)
-    
-    
-    
-    # def on_train_epoch_end(self):
-    #     # do something with all training_step outputs, for example:
-    #     epoch_mean = torch.stack(self.training_step_outputs).mean()
-    #     self.log("training_epoch_mean", epoch_mean)
-    #     # free up the memory
-    #     self.training_step_outputs.clear()

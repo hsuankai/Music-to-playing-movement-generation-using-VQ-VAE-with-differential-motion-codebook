@@ -1,51 +1,77 @@
 import pickle
-import numpy as np
+import zipfile
+from pathlib import Path
+from typing import Any, Dict, Optional
+from huggingface_hub import hf_hub_download
+
+import torch
 from torch.utils.data import Dataset
+from utils import audio_aggregate
 
 
-class audio_skeleton_dataset(Dataset):
-    def __init__(self, cfg, split="train", train_model="MotionVQVAE"):
-        path = cfg["path"]
-        self.aggr_length = cfg["aggr_length"]
+class AudioSkeletonDataset(Dataset):
+    def __init__(
+        self,
+        cfg: Any,
+        split: str = "train",
+        train_model: str = "motionvqvae",
+    ) -> None:
+        """
+        Args:
+            cfg: configuration namespace/dict, must have `train_path`, `fps`, `audio.aggr_len`
+            split: one of "train" or "val"
+            train_model: "motionvqvae" or "audio2motion"
+        """
         self.train_model = train_model
-        with open(path, "rb") as f:
-            data = pickle.load(f)[split]
-        
-        if train_model == "MotionVQVAE":
-            self.keypoints = data["keypoints"]
-        elif train_model == "AudioEnc":
-            self.aud = data["aud"]
-            self.keypoints = data["keypoints"]
-            
-        self.len = len(data["aud"])
-        print(self.len)
-        del data
-        
-    def audio_aggregate(self, aud, aggr_length=5):
-        pad = (aggr_length-1) // 2
-        aud = np.pad(aud, ((pad,pad),(0,0)))
-        aud_expand = []
-        for i in range(pad, len(aud)-pad):
-            temp = aud[i-pad:i+(pad+1)]
-            aud_expand.append(temp)
-        aud_expand = np.array(aud_expand)
-        return aud_expand
-    
-    def __getitem__(self, index):
-        result = dict()
-        if self.train_model == "MotionVQVAE":
-            keypoints = self.keypoints[index]
-            result["keypoints"] = keypoints
-        
-        elif self.train_model == "AudioEnc":
-            aud = self.aud[index]
-            keypoints = self.keypoints[index]
-            if self.aggr_length != None:
-                result["ori_aud"] = aud
-                aud = self.audio_aggregate(aud, aggr_length=self.aggr_length)
-            result["aud"] = aud
-            result["keypoints"] = keypoints
-        return result
+        self.aggr_len: Optional[int] = cfg.audio.aggr_len
 
-    def __len__(self):
+        # build path and load pickle
+        data_dir = Path("data")
+        data_file = f"train_fps{cfg.fps}.pkl"
+        data_path = data_dir / data_file
+        if not data_path.exists():
+            data_dir.mkdir(parents=True, exist_ok=True)
+            # repo_id="hkkao/mosa_motion", path_in_repo="audio2motion/30.ckpt"
+            downloaded = hf_hub_download(
+                repo_id="hkkao/mosa_motion",
+                filename=f"fps{cfg.fps}.zip",
+                local_dir=str(data_dir),
+                repo_type="dataset"
+            )
+            # hf_hub_download returns the full path to the downloaded file:
+            zip_path = Path(downloaded)
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(data_dir)
+            # Clean up temporary file
+            zip_path.unlink(missing_ok=True)
+        with open(data_path, "rb") as f:
+            data = pickle.load(f)[split]
+
+        # always present
+        self.keypoints = data["keypoints"]
+        self.len = len(data["aud"])
+        self.keypoints_mean: float = data["keypoints_mean"]
+        self.keypoints_std: float = data["keypoints_std"]
+
+        # only for audio2motion
+        if train_model == "audio2motion":
+            self.audios = data["aud"]
+
+        # clean up
+        del data
+
+    def __len__(self) -> int:
         return self.len
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        # always return keypoints tensor
+        kp = torch.from_numpy(self.keypoints[idx]).float()
+        item: Dict[str, torch.Tensor] = {"keypoints": kp}
+
+        if self.train_model == "audio2motion":
+            aud = self.audios[idx]
+            if self.aggr_len is not None:
+                aud = audio_aggregate(aud, aggr_len=self.aggr_len)
+            item["aud"] = torch.from_numpy(aud).float()
+
+        return item

@@ -1,48 +1,50 @@
-# WARNING: This is the base configuration file shared across ALL solvers in AudioCraft
-# Please don't update this file directly. Instead use distinct configuration files
-# to override the below configuration.
-defaults:
-   - _self_
-   - solver: musicgen/musicgen_base_32khz
+# Frame rate identifier
+fps: &fps 30
 
+earlystopping:
+  start_after_epoch: 30 
+  monitor: val_loss    
+  patience: 10
+  verbose: true
+  mode: min
 
-FPS: "fps30"
-
-Trainer:
-  default_root_dir: "lightning_logs"
-  accelerator: "gpu"
-  strategy: "ddp"
-  devices: 1
-  precision: 16
+trainer:
+  default_root_dir: .
+  strategy: ddp_find_unused_parameters_true
+  precision: "16-mixed"
   max_epochs: 500
   gradient_clip_val: 1.0
 
 optim:
-  lr: 1e-4
-  betas: (0.9, 0.95)
-  eps: 1e-08
+  lr: !!float 1e-4
+  betas: [0.9, 0.95]
+  eps: !!float 1e-08
   weight_decay: 0.1
 
 data:
-  path: "../data/"
+  fps: *fps
+  batch_size: 32
+  num_workers: 4
+  train_path: "data/train_"
+  test_path: "data/test_"
   audio:
-    in_channels: 128
-    aggr_length: 5
+    in_channels: &audio_in_channels 128
+    aggr_len: 5
   keypoints:
-      in_channels: 69
+      in_channels: &keypoints_in_channels 69
       full_keypoints: 23
       body: [0, 1, 2, 3, 4, 13, 14, 15, 16, 17, 18]
       rh: [6, 7, 8]
-  
+      
 motionvqvae:
+  ckpt_path: "checkpoint/motionvqvae/"
   model:
-      codebook_num: 2
-      codebook_size: [512, 512]
-      emb_dim: 512
-      gn: 32
-      act: swish
+      codebook_size: &motion_codebook_size [512, 512]
+      in_channels: *keypoints_in_channels
       ch: 128
       num_res_blocks: 2  
+      num_groups: 32
+      act: swish
       dropout: 0.1
       resamp_with_conv: true
       fps30:
@@ -52,18 +54,23 @@ motionvqvae:
       fps120:
         ch_mult: [1, 2, 4, 8, 8, 8]
   loss_weight:
-      commit: 0.5
+      rec: 0.5
       vel: 1
       acc: 0
-  
-  
-audioenc:
+      commit: 0.5
+      commit1: 1
+      commit2: 1
+      commit3: 1
+      
+audio2motion:
+  ckpt_path: "checkpoint/audio2motion/"
   model:
-    emb_dim: 512
-    gn: 32
-    act: swish
+    codebook_size: *motion_codebook_size
+    in_channels: *audio_in_channels
     ch: 128
     num_res_blocks: 2  
+    num_groups: 32
+    act: swish
     dropout: 0.1
     fps30:
       ch_mult: [1, 2, 4, 4]

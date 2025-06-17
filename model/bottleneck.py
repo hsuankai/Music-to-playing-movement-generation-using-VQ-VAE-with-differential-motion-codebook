@@ -2,7 +2,6 @@ import numpy as np
 import torch as t
 import torch.nn as nn
 import torch.nn.functional as F
-# import model.utils.dist_adapter as dist
 
 class BottleneckBlock(nn.Module):
     def __init__(self, k_bins, emb_width, mu):
@@ -17,7 +16,7 @@ class BottleneckBlock(nn.Module):
         self.init = False
         self.k_sum = None
         self.k_elem = None
-        self.register_buffer('k', t.zeros(self.k_bins, self.emb_width).cuda())
+        self.register_buffer('k', t.zeros(self.k_bins, self.emb_width))
 
     def _tile(self, x):
         d, ew = x.shape
@@ -112,8 +111,7 @@ class BottleneckBlock(nn.Module):
     def quantise(self, x):
         # Calculate latent code x_l
         k_w = self.k.t() # emb_width x k_bins
-        distance = t.sum(x ** 2, dim=-1, keepdim=True) - 2 * t.matmul(x, k_w) + t.sum(k_w ** 2, dim=0,
-                                                                                            keepdim=True)  # (N * L, b)
+        distance = t.sum(x ** 2, dim=-1, keepdim=True) - 2 * t.matmul(x, k_w) + t.sum(k_w ** 2, dim=0, keepdim=True)  # (N * L, b)
         min_distance, x_l = t.min(distance, dim=-1) # encoding indices
         fit = t.mean(min_distance) # average distance between embedding_x and codebook
         return x_l, fit
@@ -148,6 +146,7 @@ class BottleneckBlock(nn.Module):
 
     def forward(self, x, update_k=True):
         N, width, T = x.shape
+        
         # Preprocess
         x, prenorm = self.preprocess(x)
 
@@ -167,11 +166,8 @@ class BottleneckBlock(nn.Module):
         
         # Loss
         commit_loss = t.norm(x_d.detach() - x) ** 2 / np.prod(x.shape)
-
         
-        return x_l, x_d, commit_loss, dict(fit=fit,
-                                           pn=prenorm,
-                                           **update_metrics)
+        return x_l, x_d, commit_loss, dict(fit=fit, pn=prenorm, **update_metrics)
 
 class Bottleneck(nn.Module):
     def __init__(self, l_bins, emb_width, mu, levels):
