@@ -24,9 +24,9 @@ python test.py --fps 30 --model motionvqvae
 ### Inference in the wild
 If you want to make a video and get predicted keypoints for custom audio data using a pretrained model, run the following command:
 ```
-python inference.py --fps 30 --audio xxx.wav --plot_path results/animation --output_path results/keypoints
+python inference.py --fps 30 --audio xxx.wav --save_dir results/
 ```
 - `--fps` Specify the frame rate that matches the model you trained (30, 60, or 120).
 - `--audio` Path to your audio file (e.g., xxx.wav).
-- `--plot_path`  Path to save the generated animation video.
-- `--output_path` Path to save predicted keypoints as a pickle file (dimensions: N x K x C, where N = number of frames, K = number of keypoints, C = x, y, z axes).
+- `--save_dir` Path to save predicted keypoints as a pickle file (dimensions: N x K x C, where N = number of frames, K = number of keypoints, C = x, y, z axes), and
+               aath to save animation.
