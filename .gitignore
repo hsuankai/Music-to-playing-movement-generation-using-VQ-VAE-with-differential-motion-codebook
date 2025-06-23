@@ -10,6 +10,7 @@ checkpoint/
 data/
 results/
 
-# Ignore all Python bytecode files
+# Ignore Python bytecode
 __pycache__/
-*.pyc
+*.py[cod]
+
