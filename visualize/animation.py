@@ -12,7 +12,7 @@ from moviepy import VideoFileClip, AudioFileClip
 
 def plot_animation(
     audio_path: str,
-    plot_path: str,
+    plot_dir: str,
     prediction: np.ndarray,
     ground_truth: np.ndarray | None = None,
     sample_time: tuple[int, int] | None = None,
@@ -58,9 +58,8 @@ def plot_animation(
     # Attach audio and save final video
     audio_name = audio_path.split("/")[-1]
     audio_name, ext = os.path.splitext(audio_name)
-    if not os.path.exists(plot_path):
-        os.makedirs(plot_path)
-    plot_path = plot_path + "/" + audio_name + ".mp4"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    plot_path = plot_dir /  f"{audio_name}.mp4"
     video_clip = VideoFileClip(str(temp_video))
     video_clip = video_clip.with_audio(audio_clip)
     video_clip.write_videofile(plot_path, fps=fps)

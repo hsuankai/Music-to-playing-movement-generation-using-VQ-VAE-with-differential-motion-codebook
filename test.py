@@ -219,7 +219,7 @@ print(f"Attack F1 Score:     {avg_attack_f1:.3f}")
 # -------------------------------------------------------------------------
 # Save results dictionary
 # -------------------------------------------------------------------------
-save_dir = Path(f"results/keypoints/{test_model}")
+save_dir = Path(f"results/fps{FPS}/keypoints/{test_model}")
 save_dir.mkdir(parents=True, exist_ok=True)
 output_path =  save_dir / f"fps{FPS}.pkl"
 output_path.parent.mkdir(exist_ok=True)

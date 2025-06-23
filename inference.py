@@ -34,18 +34,12 @@ parser.add_argument(
     help="Device to run on (e.g., 'cpu' or 'cuda')",
 )
 parser.add_argument(
-    "--save_path",
-    default="results/keypoints",
+    "--save_dir",
+    default="results/",
     help="Save path of predicted points",
 )
-parser.add_argument(
-    "--plot_path",
-    default="results/animation",
-    help="Plot path of 3D animation",
-)
-args = parser.parse_args()
 
-FPS = args.fps
+args = parser.parse_args()
 DEVICE = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
 # -------------------------------------------------------------------------
@@ -56,14 +50,14 @@ with open("config/config.yaml", "r") as f:
 cfg = AttrDict.from_nested_dicts(cfg)
 
 # Override cfg.fps to match the integer FPS argument
-cfg.fps = f"{FPS}"
+cfg.fps = f"{args.fps}"
 
 # -------------------------------------------------------------------------
 # Initialize model
 # -------------------------------------------------------------------------
 vqvae = MotionVQVAE(cfg)
 ckpt_dir = Path(cfg.audio2motion.ckpt_path)       
-ckpt_file = f"fps{FPS}.ckpt"                     # e.g. "fps30.ckpt"
+ckpt_file = f"fps{args.fps}.ckpt"                     # e.g. "fps30.ckpt"
 ckpt_path = ckpt_dir / ckpt_file
 if not ckpt_path.exists():
     ckpt_dir.mkdir(parents=True, exist_ok=True)
@@ -81,13 +75,18 @@ model = Audio2Motion.load_from_checkpoint(
 
 model.eval()
 with torch.no_grad():
-    pred = model.inference(args.audio, DEVICE, FPS)
+    pred = model.inference(args.audio, DEVICE, args.fps)
 
-save_dir = Path(args.save_path)
-save_dir.mkdir(parents=True, exist_ok=True)
+save_dir = args.save_dir + f"fps{args.fps}/"
+# Save keypoints
+keypoints_dir = Path(save_dir + "keypoints")
+keypoints_dir.mkdir(parents=True, exist_ok=True)
 audio_name = args.audio.split("/")[-1]
 audio_name, ext = os.path.splitext(audio_name)
-save_path = args.save_path + "/" + f"{audio_name}.pkl"
-with open(save_path, 'wb') as f:
+keypoints_path = keypoints_dir / f"{audio_name}.pkl"
+with open(keypoints_path, 'wb') as f:
     pickle.dump(pred, f)
-plot_animation(args.audio, args.plot_path, pred)
+
+# Plot animation
+plot_dir = Path(save_dir + "animation")
+plot_animation(args.audio, plot_dir, pred, fps=args.fps)
