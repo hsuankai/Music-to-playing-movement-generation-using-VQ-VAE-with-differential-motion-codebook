@@ -1,0 +1,15 @@
+# Ignore all .log files
+*.log
+
+# Ignore a specific file
+generate.py
+
+# Ignore everything in the tmp/ folder
+Audio/
+checkpoint/
+data/
+results/
+
+# Ignore all Python bytecode files
+__pycache__/
+*.pyc
