@@ -5,4 +5,5 @@ matplotlib==3.7.2
 mir_eval==0.7
 moviepy==2.2.1
 PyYAML==6.0.2
+numpy==1.26.4
 torch==2.2.0
