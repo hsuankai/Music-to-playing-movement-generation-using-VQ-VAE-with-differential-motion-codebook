@@ -1,5 +1,4 @@
 huggingface_hub==0.22.2
-jukebox==0.4.1
 librosa==0.10.1
 lightning==2.5.0.post0
 matplotlib==3.7.2
